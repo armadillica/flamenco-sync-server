@@ -1,39 +1,44 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/armadillica/flamenco-sync-server/rsync"
 	log "github.com/sirupsen/logrus"
 )
 
-type syncServer struct{}
+type httpHandler struct {
+	rsyncServer *rsync.Server
+}
 
-func createSyncServer() *syncServer {
-	return &syncServer{}
+func createHTTPHandler(rsyncServer *rsync.Server) *httpHandler {
+	if rsyncServer == nil {
+		panic("rsyncServer == nil")
+	}
+	return &httpHandler{rsyncServer}
 }
 
 // ServeHTTP performs auth and then starts and defers to an rsync daemon.
-func (ss *syncServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (ss *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status := 0
-	fields := log.Fields{
+	logger := log.WithFields(log.Fields{
 		"remote_addr": r.RemoteAddr,
 		"method":      r.Method,
 		"url":         r.URL.String(),
-	}
+	})
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		fields["x_forwarded_for"] = xff
+		logger = logger.WithField("x_forwarded_for", xff)
 	}
 
 	startTime := time.Now().UTC()
 	defer func() {
 		endTime := time.Now().UTC()
-		fields["duration"] = endTime.Sub(startTime)
+		fields := log.Fields{"duration": endTime.Sub(startTime)}
 		if status != 0 {
 			fields["status"] = status
 		}
-		log.WithFields(fields).Info("Request handled")
+		logger.WithFields(fields).Info("Request handled")
 	}()
 
 	if r.Method != "RSYNC" {
@@ -42,15 +47,32 @@ func (ss *syncServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Header.Get("Upgrade") != "websocket" {
-		log.WithFields(fields).Warning("No websocket, no request")
-		status = http.StatusNotImplemented
+	h, ok := w.(http.Hijacker)
+	if !ok {
+		logger.Error("httphandler: response does not implement http.Hijacker")
+		status = http.StatusInternalServerError
 		w.WriteHeader(status)
 		return
 	}
 
-	// All our checks were fine, so now we can defer RSync to do the actual work.
-	status = http.StatusOK
-	w.WriteHeader(status)
-	fmt.Fprint(w, "Upgrading to RSYNC protocol")
+	w.Header().Set("Transfer-Encoding", "identity")
+	w.Header().Set("Upgrade", "rsync")
+	w.Header().Set("Connection", "upgrade")
+	w.WriteHeader(http.StatusSwitchingProtocols)
+
+	netConn, brw, err := h.Hijack()
+	if err != nil {
+		logger.WithError(err).Error("httphandler: unable to hijack HTTP connection")
+		status = http.StatusInternalServerError
+		w.WriteHeader(status)
+		return
+	}
+	if brw.Reader.Buffered() > 0 {
+		netConn.Close()
+		logger.Error("httphandler: client sent data before handshake is complete")
+		return
+	}
+
+	logger.Debug("Hijacked HTTP connection")
+	ss.rsyncServer.StartDaemon(netConn, brw)
 }

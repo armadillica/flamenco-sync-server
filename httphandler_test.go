@@ -11,14 +11,14 @@ import (
 )
 
 type HTTPHandlerTestSuite struct {
-	fss *syncServer
+	fss *httpHandler
 }
 
 var _ = check.Suite(&HTTPHandlerTestSuite{})
 
 func (s *HTTPHandlerTestSuite) SetUpTest(c *check.C) {
 	httpmock.Activate()
-	s.fss = createSyncServer()
+	s.fss = createHTTPHandler(nil)
 }
 
 func (s *HTTPHandlerTestSuite) TearDownTest(c *check.C) {
@@ -33,18 +33,9 @@ func (s *HTTPHandlerTestSuite) TestGET(t *check.C) {
 	assert.Equal(t, http.StatusMethodNotAllowed, respRec.Code)
 }
 
-func (s *HTTPHandlerTestSuite) TestRsyncNoWebsocket(t *check.C) {
+func (s *HTTPHandlerTestSuite) TestRsyncHappy(t *check.C) {
 	respRec := httptest.NewRecorder()
 	request, _ := http.NewRequest("RSYNC", "/etc/passwd", nil)
-	s.fss.ServeHTTP(respRec, request)
-
-	assert.Equal(t, http.StatusNotImplemented, respRec.Code)
-}
-
-func (s *HTTPHandlerTestSuite) TestRsyncWebsocketHappy(t *check.C) {
-	respRec := httptest.NewRecorder()
-	request, _ := http.NewRequest("RSYNC", "/etc/passwd", nil)
-	request.Header.Set("Upgrade", "websocket")
 	s.fss.ServeHTTP(respRec, request)
 
 	assert.Equal(t, http.StatusOK, respRec.Code)

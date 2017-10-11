@@ -8,6 +8,7 @@ import (
 
 	stdlog "log"
 
+	"github.com/armadillica/flamenco-sync-server/rsync"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -78,15 +79,16 @@ func main() {
 	}
 
 	logFields := log.Fields{"listen": cliArgs.listen}
-	syncServer := createSyncServer()
+	rsyncServer := rsync.CreateServer()
+	httpHandler := createHTTPHandler(rsyncServer)
 
 	var httpError error
 	if cliArgs.tlsCert != "" {
 		log.WithFields(logFields).Info("Starting HTTPS server")
-		httpError = http.ListenAndServeTLS(cliArgs.listen, cliArgs.tlsCert, cliArgs.tlsKey, syncServer)
+		httpError = http.ListenAndServeTLS(cliArgs.listen, cliArgs.tlsCert, cliArgs.tlsKey, httpHandler)
 	} else {
 		log.WithFields(logFields).Info("Starting HTTP server")
-		httpError = http.ListenAndServe(cliArgs.listen, syncServer)
+		httpError = http.ListenAndServe(cliArgs.listen, httpHandler)
 	}
 	log.WithFields(logFields).WithError(httpError).Fatal("HTTP server failed")
 }
