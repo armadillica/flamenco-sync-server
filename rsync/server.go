@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -41,12 +42,20 @@ func (rss *Server) StartDaemon(conn net.Conn) {
 }
 
 func (rss *Server) work(conn net.Conn) {
-	defer rss.cleanup(conn)
 	defer rss.daemons.Done()
 
 	logfields := log.Fields{
 		"remote_addr": conn.RemoteAddr(),
 	}
+	logger := log.WithFields(logfields)
+
+	startTime := time.Now().UTC()
+	defer func() {
+		endTime := time.Now().UTC()
+		duration := endTime.Sub(startTime)
+		logger.WithField("duration", duration).Info("rsync daemon finished")
+	}()
+	defer rss.cleanup(conn)
 
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
@@ -61,13 +70,12 @@ func (rss *Server) work(conn net.Conn) {
 	cmd := exec.Command("./rsync-server", "--daemon", "--config", "./rsyncd.conf")
 	cmd.Stdin = fileConn
 	// RSync will close its stdout and stderr file descriptors because stdin is a socket.
-	log.WithFields(logfields).Debug("rsync daemon: starting")
+	logger.Debug("rsync daemon: starting")
 
 	if err := cmd.Run(); err != nil {
 		rss.logCmdError(logfields, err)
 		return
 	}
-	log.WithFields(logfields).Info("rsync ran OK, closing connection")
 }
 
 func (rss *Server) logCmdError(logfields log.Fields, err error) {
