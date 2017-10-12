@@ -1,7 +1,6 @@
 package rsync
 
 import (
-	"bufio"
 	"net"
 	"sync"
 
@@ -26,12 +25,12 @@ func CreateServer() *Server {
 }
 
 // StartDaemon starts a new daemon connected to the given network connection.
-func (rss *Server) StartDaemon(conn net.Conn, brw *bufio.ReadWriter) {
+func (rss *Server) StartDaemon(conn net.Conn) {
 	rss.mutex.Lock()
 	defer rss.mutex.Unlock()
 
-	daemon := rsyncDaemon{conn, brw}
-	rss.daemons = append(rss.daemons, &daemon)
+	daemon := createRsyncDaemon(conn)
+	rss.daemons = append(rss.daemons, daemon)
 
 	go daemon.work()
 }

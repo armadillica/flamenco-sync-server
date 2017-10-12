@@ -38,7 +38,7 @@ func (ss *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if status != 0 {
 			fields["status"] = status
 		}
-		logger.WithFields(fields).Info("Request handled")
+		logger.WithFields(fields).Debug("request handled")
 	}()
 
 	if r.Method != "RSYNC" {
@@ -74,5 +74,5 @@ func (ss *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Debug("Hijacked HTTP connection")
-	ss.rsyncServer.StartDaemon(netConn, brw)
+	ss.rsyncServer.StartDaemon(netConn)
 }
