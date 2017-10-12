@@ -1,6 +1,7 @@
 package rsync
 
 import (
+	"fmt"
 	"net"
 	"os/exec"
 	"sync"
@@ -57,10 +58,16 @@ func (rss *Server) work(conn net.Conn) {
 	}()
 	defer rss.cleanup(conn)
 
+	// If this is a straight TCP/IP connection we can pass it to rsync, otherwise we need
+	// to make sure it is one, and since we don't need this in production (the SSL termination
+	// is done somewhere else) I won't implement this now.
 	tcpConn, ok := conn.(*net.TCPConn)
 	if !ok {
-		panic("not TCP/IP")
+		fmt.Fprint(conn, "@RSYNCD: 31.0\n")
+		fmt.Fprint(conn, "@ERROR: not a TCP/IP connection, here be dragons.\n")
+		logger.Fatal("not a TCP/IP connection, here be dragons.")
 	}
+
 	fileConn, err := tcpConn.File()
 	if err != nil {
 		panic(err)

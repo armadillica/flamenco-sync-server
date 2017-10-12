@@ -21,8 +21,6 @@ var cliArgs struct {
 	verbose bool
 	debug   bool
 	listen  string
-	tlsCert string
-	tlsKey  string
 }
 
 func parseCliArgs() {
@@ -30,8 +28,6 @@ func parseCliArgs() {
 	flag.BoolVar(&cliArgs.verbose, "verbose", false, "Enable info-level logging.")
 	flag.BoolVar(&cliArgs.debug, "debug", false, "Enable debug-level logging.")
 	flag.StringVar(&cliArgs.listen, "listen", "[::]:8084", "Address to listen on.")
-	flag.StringVar(&cliArgs.tlsCert, "cert", "", "TLS certificate file.")
-	flag.StringVar(&cliArgs.tlsKey, "key", "", "TLS key file.")
 	flag.Parse()
 }
 
@@ -83,13 +79,7 @@ func main() {
 	rsyncServer := rsync.CreateServer()
 	httpHandler := httphandler.CreateHTTPHandler(rsyncServer)
 
-	var httpError error
-	if cliArgs.tlsCert != "" {
-		log.WithFields(logFields).Info("Starting HTTPS server")
-		httpError = http.ListenAndServeTLS(cliArgs.listen, cliArgs.tlsCert, cliArgs.tlsKey, httpHandler)
-	} else {
-		log.WithFields(logFields).Info("Starting HTTP server")
-		httpError = http.ListenAndServe(cliArgs.listen, httpHandler)
-	}
+	log.WithFields(logFields).Info("Starting HTTP server")
+	httpError := http.ListenAndServe(cliArgs.listen, httpHandler)
 	log.WithFields(logFields).WithError(httpError).Fatal("HTTP server failed")
 }
