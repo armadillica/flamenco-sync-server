@@ -15,9 +15,6 @@ type HTTPHandler struct {
 
 // CreateHTTPHandler creates a new HTTP request handler that's bound to the given rsync server.
 func CreateHTTPHandler(rsyncServer *rsync.Server) *HTTPHandler {
-	if rsyncServer == nil {
-		panic("rsyncServer == nil")
-	}
 	return &HTTPHandler{rsyncServer}
 }
 

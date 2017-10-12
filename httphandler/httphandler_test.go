@@ -10,6 +10,9 @@ import (
 	"gopkg.in/jarcoal/httpmock.v1"
 )
 
+/* This doesn't actually test the happy flow, since the mocked HTTP stuff
+ * doesn't implement http.Hijacker. */
+
 type HTTPHandlerTestSuite struct {
 	fss *HTTPHandler
 }
@@ -31,12 +34,4 @@ func (s *HTTPHandlerTestSuite) TestGET(t *check.C) {
 	s.fss.ServeHTTP(respRec, request)
 
 	assert.Equal(t, http.StatusMethodNotAllowed, respRec.Code)
-}
-
-func (s *HTTPHandlerTestSuite) TestRsyncHappy(t *check.C) {
-	respRec := httptest.NewRecorder()
-	request, _ := http.NewRequest("RSYNC", "/etc/passwd", nil)
-	s.fss.ServeHTTP(respRec, request)
-
-	assert.Equal(t, http.StatusOK, respRec.Code)
 }

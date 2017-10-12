@@ -1,7 +1,7 @@
 /**
  * Common test functionality, and integration with GoCheck.
  */
-package main
+package httphandler
 
 import (
 	"testing"
