@@ -8,6 +8,7 @@ import (
 
 	stdlog "log"
 
+	"github.com/armadillica/flamenco-sync-server/httphandler"
 	"github.com/armadillica/flamenco-sync-server/rsync"
 	log "github.com/sirupsen/logrus"
 )
@@ -80,7 +81,7 @@ func main() {
 
 	logFields := log.Fields{"listen": cliArgs.listen}
 	rsyncServer := rsync.CreateServer()
-	httpHandler := createHTTPHandler(rsyncServer)
+	httpHandler := httphandler.CreateHTTPHandler(rsyncServer)
 
 	var httpError error
 	if cliArgs.tlsCert != "" {

@@ -1,4 +1,4 @@
-package main
+package httphandler
 
 import (
 	"net/http"
@@ -8,19 +8,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type httpHandler struct {
+// HTTPHandler serves HTTP requests and forwards connections to the rsync server.
+type HTTPHandler struct {
 	rsyncServer *rsync.Server
 }
 
-func createHTTPHandler(rsyncServer *rsync.Server) *httpHandler {
+// CreateHTTPHandler creates a new HTTP request handler that's bound to the given rsync server.
+func CreateHTTPHandler(rsyncServer *rsync.Server) *HTTPHandler {
 	if rsyncServer == nil {
 		panic("rsyncServer == nil")
 	}
-	return &httpHandler{rsyncServer}
+	return &HTTPHandler{rsyncServer}
 }
 
 // ServeHTTP performs auth and then starts and defers to an rsync daemon.
-func (ss *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (ss *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	status := 0
 	logger := log.WithFields(log.Fields{
 		"remote_addr": r.RemoteAddr,

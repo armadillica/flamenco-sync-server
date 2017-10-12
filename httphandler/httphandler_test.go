@@ -1,4 +1,4 @@
-package main
+package httphandler
 
 import (
 	"net/http"
@@ -11,14 +11,14 @@ import (
 )
 
 type HTTPHandlerTestSuite struct {
-	fss *httpHandler
+	fss *HTTPHandler
 }
 
 var _ = check.Suite(&HTTPHandlerTestSuite{})
 
 func (s *HTTPHandlerTestSuite) SetUpTest(c *check.C) {
 	httpmock.Activate()
-	s.fss = createHTTPHandler(nil)
+	s.fss = CreateHTTPHandler(nil)
 }
 
 func (s *HTTPHandlerTestSuite) TearDownTest(c *check.C) {
