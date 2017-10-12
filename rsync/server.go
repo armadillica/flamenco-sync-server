@@ -58,7 +58,7 @@ func (rss *Server) work(conn net.Conn) {
 	}
 
 	// Start the RSync process, connecting it to the network connection.
-	cmd := exec.Command("/home/sybren/workspace/dpkg/rsync-3.1.1/rsync", "--daemon", "--config", "./rsyncd.conf", "--no-detach", "--verbose")
+	cmd := exec.Command("./rsync-server", "--daemon", "--config", "./rsyncd.conf")
 	cmd.Stdin = fileConn
 	// RSync will close its stdout and stderr file descriptors because stdin is a socket.
 	log.WithFields(logfields).Debug("rsync daemon: starting")
