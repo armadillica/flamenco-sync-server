@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	stdlog "log"
 
+	"github.com/armadillica/flamenco-manager/flamenco"
 	"github.com/armadillica/flamenco-sync-server/httphandler"
 	"github.com/armadillica/flamenco-sync-server/rsync"
 	log "github.com/sirupsen/logrus"
@@ -15,6 +20,14 @@ import (
 
 const applicationVersion = "0.1-dev"
 const applicationName = "Flamenco Sync Server"
+
+// Components that make up the application
+var rsyncServer *rsync.Server
+var httpServer *http.Server
+
+// Signalling channels
+var shutdownComplete chan struct{}
+var httpShutdownComplete chan struct{}
 
 var cliArgs struct {
 	version bool
@@ -57,6 +70,37 @@ func logStartup() {
 	}).Infof("Starting %s", applicationName)
 }
 
+func shutdown(signum os.Signal) {
+	// Force shutdown after a bit longer than the HTTP server timeout.
+	timeout := flamenco.TimeoutAfter(17 * time.Second)
+
+	go func() {
+		log.WithField("signal", signum).Info("Signal received, shutting down.")
+
+		if httpServer != nil {
+			log.Info("Shutting down HTTP server")
+			// the Shutdown() function seems to hang sometime, even though the
+			// main goroutine continues execution after ListenAndServe().
+			go httpServer.Shutdown(context.Background())
+			<-httpShutdownComplete
+		} else {
+			log.Warning("HTTP server was not even started yet")
+		}
+
+		rsyncServer.Shutdown()
+
+		timeout <- false
+	}()
+
+	if <-timeout {
+		log.Error("Shutdown forced, stopping process.")
+		os.Exit(-2)
+	}
+
+	log.Warning("Shutdown complete, stopping process.")
+	close(shutdownComplete)
+}
+
 func main() {
 	parseCliArgs()
 	if cliArgs.version {
@@ -76,10 +120,40 @@ func main() {
 	}
 
 	logFields := log.Fields{"listen": cliArgs.listen}
-	rsyncServer := rsync.CreateServer()
+	rsyncServer = rsync.CreateServer()
 	httpHandler := httphandler.CreateHTTPHandler(rsyncServer)
 
+	// Create the HTTP server before allowing the shutdown signal Handler
+	// to exist. This prevents a race condition when Ctrl+C is pressed after
+	// the http.Server is created, but before it is assigned to httpServer.
+	httpServer = &http.Server{
+		Addr:        cliArgs.listen,
+		Handler:     httpHandler,
+		ReadTimeout: 15 * time.Second,
+	}
+
+	shutdownComplete = make(chan struct{})
+	httpShutdownComplete = make(chan struct{})
+
+	// Handle Ctrl+C
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	go func() {
+		for signum := range c {
+			// Run the shutdown sequence in a goroutine, so that multiple Ctrl+C presses can be handled in parallel.
+			go shutdown(signum)
+		}
+	}()
+
 	log.WithFields(logFields).Info("Starting HTTP server")
-	httpError := http.ListenAndServe(cliArgs.listen, httpHandler)
-	log.WithFields(logFields).WithError(httpError).Fatal("HTTP server failed")
+	httpError := httpServer.ListenAndServe()
+	if httpError != nil && httpError != http.ErrServerClosed {
+		log.WithError(httpError).Error("HTTP server stopped")
+	}
+	close(httpShutdownComplete)
+
+	log.Info("Waiting for shutdown to complete.")
+
+	<-shutdownComplete
 }

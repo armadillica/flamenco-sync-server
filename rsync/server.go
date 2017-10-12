@@ -4,17 +4,16 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
-	"sync"
 	"syscall"
 	"time"
 
+	"github.com/armadillica/flamenco-sync-server/servertools"
 	log "github.com/sirupsen/logrus"
 )
 
 // Server manages multiple rsync daemons.
 type Server struct {
-	daemons  sync.WaitGroup
-	shutdown chan interface{}
+	closable servertools.Closable
 }
 
 // CreateServer creates a new rsync server, which in turn can create
@@ -23,27 +22,25 @@ func CreateServer() *Server {
 	log.Info("Starting rsync server")
 
 	return &Server{
-		daemons:  sync.WaitGroup{},
-		shutdown: make(chan interface{}),
+		closable: servertools.MakeClosable(),
 	}
 }
 
-// Shutdown gracefully shuts down the server by refusing to create new daemons
-// and waiting until all running daemons have stopped.
+// Shutdown waits until all running daemons have stopped.
 func (rss *Server) Shutdown() {
 	log.Info("rsync server: shutting down, waiting for rsync daemons to stop")
-	rss.daemons.Wait()
+	rss.closable.ClosableCloseAndWait()
 	log.Info("rsync server: shut down")
 }
 
 // StartDaemon starts a new daemon connected to the given network connection.
 func (rss *Server) StartDaemon(conn net.Conn) {
-	rss.daemons.Add(1)
+	rss.closable.ClosableAdd(1)
 	go rss.work(conn)
 }
 
 func (rss *Server) work(conn net.Conn) {
-	defer rss.daemons.Done()
+	defer rss.closable.ClosableDone()
 
 	logfields := log.Fields{
 		"remote_addr": conn.RemoteAddr(),
@@ -117,6 +114,4 @@ func (rss *Server) cleanup(conn net.Conn) {
 	} else {
 		logger.Debug("Connection closed")
 	}
-
-	// TODO: remove this daemon from the server list of daemons
 }
