@@ -12,7 +12,6 @@ import (
 
 	stdlog "log"
 
-	"github.com/armadillica/flamenco-manager/flamenco"
 	"github.com/armadillica/flamenco-sync-server/httphandler"
 	"github.com/armadillica/flamenco-sync-server/rsync"
 	log "github.com/sirupsen/logrus"
@@ -71,8 +70,7 @@ func logStartup() {
 }
 
 func shutdown(signum os.Signal) {
-	// Force shutdown after a bit longer than the HTTP server timeout.
-	timeout := flamenco.TimeoutAfter(17 * time.Second)
+	shutdownDone := make(chan bool)
 
 	go func() {
 		log.WithField("signal", signum).Info("Signal received, shutting down.")
@@ -88,11 +86,14 @@ func shutdown(signum os.Signal) {
 		}
 
 		rsyncServer.Shutdown()
-
-		timeout <- false
+		shutdownDone <- true
 	}()
 
-	if <-timeout {
+	// Force shutdown after a bit longer than the HTTP server timeout.
+	select {
+	case <-shutdownDone:
+		break
+	case <-time.After(17 * time.Second):
 		log.Error("Shutdown forced, stopping process.")
 		os.Exit(-2)
 	}
